@@ -5,7 +5,7 @@ NORWEGIAN = {
     "2SA": "2. Samuelsbok",   "1KI": "1. Kongebok",      "2KI": "2. Kongebok",
     "1CH": "1. Krønikebok",   "2CH": "2. Krønikebok",    "EZR": "Esra",
     "NEH": "Nehemja",         "EST": "Ester",             "JOB": "Job",
-    "PSA": "Salmenes bok",    "PRO": "Ordspråkene",       "ECC": "Forkynneren",
+    "PSA": "Salme",           "PRO": "Ordspråkene",       "ECC": "Forkynneren",
     "SNG": "Høysangen",       "ISA": "Jesaja",            "JER": "Jeremia",
     "LAM": "Klagesangene",    "EZK": "Esekiel",           "DAN": "Daniel",
     "HOS": "Hosea",           "JOL": "Joel",              "AMO": "Amos",
