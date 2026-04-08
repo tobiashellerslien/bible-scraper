@@ -155,7 +155,7 @@ def fetch_book(book: str, translation_id: int) -> dict:
 
     for chapter in range(1, total + 1):
         result.update(fetch_chapter(book, chapter, translation_id))
-        print(f"  Fetched {book} chapter {chapter}/{total} ...")
+        print(f"  Fetched {book} chapter {chapter}/{total}")
         if chapter < total:
             time.sleep(RATE_LIMIT)
 
