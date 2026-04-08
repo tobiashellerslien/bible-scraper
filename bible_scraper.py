@@ -6,10 +6,10 @@ from bs4 import BeautifulSoup
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 BASE_URL = "https://www.bible.com/bible"
-RATE_LIMIT = 0.5  # sekunder mellom requests i fetch_book
+RATE_LIMIT = 0.1  # seconds between requests in fetch_book
 
 CHAPTER_COUNT = {
-    # Det gamle testamentet
+    # Old Testament
     "GEN": 50, "EXO": 40, "LEV": 27, "NUM": 36, "DEU": 34,
     "JOS": 24, "JDG": 21, "RUT":  4, "1SA": 31, "2SA": 24,
     "1KI": 22, "2KI": 25, "1CH": 29, "2CH": 36, "EZR": 10,
@@ -18,7 +18,7 @@ CHAPTER_COUNT = {
     "EZK": 48, "DAN": 12, "HOS": 14, "JOL":  3, "AMO":  9,
     "OBA":  1, "JON":  4, "MIC":  7, "NAH":  3, "HAB":  3,
     "ZEP":  3, "HAG":  2, "ZEC": 14, "MAL":  4,
-    # Det nye testamentet
+    # New Testament
     "MAT": 28, "MRK": 16, "LUK": 24, "JHN": 21, "ACT": 28,
     "ROM": 16, "1CO": 16, "2CO": 13, "GAL":  6, "EPH":  6,
     "PHP":  4, "COL":  4, "1TH":  5, "2TH":  3, "1TI":  6,
@@ -30,14 +30,14 @@ CHAPTER_COUNT = {
 
 def fetch_chapter(book: str, chapter: int, translation_id: int) -> dict:
     """
-    Henter alle vers i et kapittel fra bible.com.
+    Fetches all verses in a chapter from bible.com.
 
-    Returnerer en dict: { "GEN.1.1": "tekst", "GEN.1.2": "tekst", ... }
-    Salmer med intro får introen som vers 0.
+    Returns a dict: { "GEN.1.1": "text", "GEN.1.2": "text", ... }
+    Psalms with an introduction get the intro stored as verse 0.
 
-    book:           USFM-forkortelse, f.eks. "GEN", "PSA", "JHN"
-    chapter:        kapittelnummer (int)
-    translation_id: bible.com oversettelse-ID, f.eks. 102 (NB88). Finnes i URL-en når du ser på et kapittel på bible.com, f.eks. https://www.bible.com/bible/102/GEN.1
+    book:           USFM abbreviation, e.g. "GEN", "PSA", "JHN"
+    chapter:        chapter number (int)
+    translation_id: bible.com translation ID, e.g. 102 (NB88). Found in the URL when viewing a chapter on bible.com, e.g. https://www.bible.com/bible/102/GEN.1
     """
     url = f"{BASE_URL}/{translation_id}/{book}.{chapter}"
 
@@ -45,7 +45,7 @@ def fetch_chapter(book: str, chapter: int, translation_id: int) -> dict:
         page = requests.get(url, headers=HEADERS, timeout=10)
         page.raise_for_status()
     except requests.RequestException as e:
-        raise ConnectionError(f"Kunne ikke hente {book}.{chapter}: {e}")
+        raise ConnectionError(f"Failed to fetch {book}.{chapter}: {e}")
 
     soup = BeautifulSoup(page.text, "html.parser")
     script_tag = soup.find("script", {"id": "__NEXT_DATA__"})
@@ -57,7 +57,7 @@ def fetch_chapter(book: str, chapter: int, translation_id: int) -> dict:
 
     result = {}
 
-    # Håndterer introen for salmer i noen oversettelser, lagrer som vers 0
+    # Handle psalm introductions in some translations, stored as verse 0
     intro_div = inner_soup.find("div", class_="d")
     if intro_div:
         content_spans = intro_div.find_all("span", class_="content")
@@ -66,7 +66,7 @@ def fetch_chapter(book: str, chapter: int, translation_id: int) -> dict:
         if intro_text:
             result[f"{book}.{chapter}.0"] = intro_text
 
-    # Håndterer vanlige vers
+    # Handle regular verses
     for verse in inner_soup.find_all("span", class_="verse"):
         usfm = verse.get("data-usfm")
         content_spans = verse.find_all("span", class_="content")
@@ -83,25 +83,25 @@ def fetch_chapter(book: str, chapter: int, translation_id: int) -> dict:
 
 
 def fetch_verse(book: str, chapter: int, verse: int, translation_id: int) -> dict:
-    """Henter ett enkelt vers. Returnerer en dict: { "JHN.3.16": "tekst" }"""
+    """Fetches a single verse. Returns a dict: { "JHN.3.16": "text" }"""
     scraped_chapter = fetch_chapter(book, chapter, translation_id)
     usfm = f"{book}.{chapter}.{verse}"
 
     if usfm not in scraped_chapter:
-        raise KeyError(f"Vers {usfm} finnes ikke i kapitlet, sjekk at versnummeret er riktig")
+        raise KeyError(f"Verse {usfm} not found in chapter, check that the verse number is correct")
 
     return {usfm: scraped_chapter[usfm]}
 
 
 def fetch_verse_range(book: str, chapter: int, verse_start: int, verse_end: int, translation_id: int) -> dict:
-    """Henter et intervall av vers fra samme kapittel. Returnerer en dict: { "GEN.1.1": "tekst", ... }"""
+    """Fetches a span of verses from the same chapter. Returns a dict: { "GEN.1.1": "text", ... }"""
     scraped_chapter = fetch_chapter(book, chapter, translation_id)
 
     result = {}
     for verse in range(verse_start, verse_end + 1):
         usfm = f"{book}.{chapter}.{verse}"
         if usfm not in scraped_chapter:
-            raise KeyError(f"Vers {usfm} finnes ikke i kapitlet, sjekk at versnummeret er riktig")
+            raise KeyError(f"Verse {usfm} not found in chapter, check that the verse number is correct")
         result[usfm] = scraped_chapter[usfm]
 
     return result
@@ -109,16 +109,16 @@ def fetch_verse_range(book: str, chapter: int, verse_start: int, verse_end: int,
 
 def fetch_verse_range_cross_chapter(book: str, chapter_start: int, verse_start: int, chapter_end: int, verse_end: int, translation_id: int) -> dict:
     """
-    Henter et intervall av vers som går over flere kapitler.
+    Fetches a span of verses across multiple chapters.
 
-    Returnerer en dict: { "ISA.52.13": "tekst", ..., "ISA.53.12": "tekst" }
+    Returns a dict: { "ISA.52.13": "text", ..., "ISA.53.12": "text" }
 
-    book:           USFM-forkortelse
-    chapter_start:  første kapittels nummer
-    verse_start:    første vers i første kapittel
-    chapter_end:    siste kapittels nummer
-    verse_end:      siste vers i siste kapittel
-    translation_id: bible.com oversettelse-ID
+    book:           USFM abbreviation
+    chapter_start:  first chapter number
+    verse_start:    first verse in the first chapter
+    chapter_end:    last chapter number
+    verse_end:      last verse in the last chapter
+    translation_id: bible.com translation ID
     """
     if chapter_start == chapter_end:
         return fetch_verse_range(book, chapter_start, verse_start, verse_end, translation_id)
@@ -146,15 +146,16 @@ def fetch_verse_range_cross_chapter(book: str, chapter_start: int, verse_start: 
 
 
 def fetch_book(book: str, translation_id: int) -> dict:
-    """Henter alle vers i en bok. Returnerer en dict: { "GEN.1.1": "tekst", ... }"""
+    """Fetches all verses in a book. Returns a dict: { "GEN.1.1": "text", ... }"""
     if book not in CHAPTER_COUNT:
-        raise KeyError(f"Ukjent bok: '{book}', bruk USFM-forkortelse, f.eks. 'GEN', 'PSA'")
+        raise KeyError(f"Unknown book: '{book}', use a USFM abbreviation, e.g. 'GEN', 'PSA'")
 
     result = {}
     total = CHAPTER_COUNT[book]
 
     for chapter in range(1, total + 1):
         result.update(fetch_chapter(book, chapter, translation_id))
+        print(f"  Fetched {book} chapter {chapter}/{total} ...")
         if chapter < total:
             time.sleep(RATE_LIMIT)
 
@@ -163,13 +164,13 @@ def fetch_book(book: str, translation_id: int) -> dict:
 
 def decode_usfm(usfm: str, book_names: dict = None) -> tuple:
     """
-    Dekoder en USFM-streng til bok, kapittel og vers.
+    Decodes a USFM string into book, chapter, and verse.
 
-    usfm:       f.eks. "GEN.1.1" eller "PSA.23.0"
-    book_names: valgfri dict med egne boknavn, f.eks. {"GEN": "1. Mosebok", "PSA": "Salmenes bok"}
-                Hvis ikke oppgitt returneres USFM-forkortelsen som boknavn.
+    usfm:       e.g. "GEN.1.1" or "PSA.23.0"
+    book_names: optional dict with custom book names, e.g. {"GEN": "1. Mosebok", "PSA": "Salmenes bok"}
+                If not provided, the USFM abbreviation is returned as the book name.
 
-    Returnerer en tuple: (boknavn, kapittel, vers)
+    Returns a tuple: (book name, chapter, verse)
     """
     parts = usfm.split(".")
     book_abbr = parts[0]
@@ -182,29 +183,29 @@ def decode_usfm(usfm: str, book_names: dict = None) -> tuple:
 
 
 if __name__ == "__main__":
-    # Eksempler på bruk:¨
-    
-    print("Henter Salme 23 i Bibel2011...")
+    # Usage examples:
+
+    print("Fetching Psalm 23 in Bibel2011...")
     chapter = fetch_chapter("PSA", 23, 29)
     for usfm, text in chapter.items():
         print(f"{usfm}: {text}")
 
-    print("\nHenter Johannes 3:16 i NB88...")
+    print("\nFetching John 3:16 in NB88...")
     verse = fetch_verse("JHN", 3, 16, 102)
     for usfm, text in verse.items():
         print(f"{usfm}: {text}")
 
-    print("\nHenter 1. Mosebok 1:1-6 i NASB1995...")
+    print("\nFetching Genesis 1:1-6 in NASB1995...")
     verse_range = fetch_verse_range("GEN", 1, 1, 6, 100)
     for usfm, text in verse_range.items():
         print(f"{usfm}: {text}")
 
-    print("\nHenter Jesaja 52:13-53:12 i NB88...")
+    print("\nFetching Isaiah 52:13-53:12 in NB88...")
     cross = fetch_verse_range_cross_chapter("ISA", 52, 13, 53, 12, 102)
     for usfm, text in cross.items():
         print(f"{usfm}: {text}")
 
-    print("\nHenter hele Jona i NB88...")
+    print("\nFetching all of Jonah in NB88...")
     book = fetch_book("JON", 102)
     for usfm, text in book.items():
         print(f"{usfm}: {text}")
