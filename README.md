@@ -12,7 +12,7 @@ pip install requests beautifulsoup4
 
 All functions are in `bible_scraper.py` and use USFM book abbreviations (e.g. `"GEN"`, `"PSA"`, `"JHN"`). Translation IDs are found in the bible.com URL, e.g. `https://www.bible.com/bible/102/GEN.1` -> ID is `102`.
 
-All fetch functions return a `dict` with USFM keys and verse text as values:
+All fetch functions return a `dict` with USFM keys, and verse text as values:
 
 ```python
 from bible_scraper import fetch_verse, fetch_verse_range, fetch_chapter, fetch_book, fetch_verse_range_cross_chapter, decode_usfm
@@ -20,7 +20,7 @@ from book_maps import NORWEGIAN, ENGLISH
 
 # Single verse
 fetch_verse("JHN", 3, 16, 102)
-# -> {"JHN.3.16": "For så høyt har Gud elsket verden..."}
+# -> {"JHN.3.16": "For så har Gud elsket verden..."}
 
 # Verse range within one chapter
 fetch_verse_range("GEN", 1, 1, 5, 102)
@@ -29,7 +29,7 @@ fetch_verse_range("GEN", 1, 1, 5, 102)
 fetch_verse_range_cross_chapter("ISA", 52, 13, 53, 12, 102)
 
 # Whole chapter
-fetch_chapter("PSA", 23, 111)
+fetch_chapter("PSA", 23, 102)
 
 # Whole book
 fetch_book("JON", 102)
@@ -46,7 +46,7 @@ decode_usfm("JHN.3.16", NORWEGIAN)
 `scrape_entire_bible.py` fetches every book and saves each as a JSON file in an output directory.
 
 ```bash
-python scrape_entire_bible.py # defaults: translation 102, Norwegian filename
+python scrape_entire_bible.py # defaults: translation 102, Norwegian filenames
 python scrape_entire_bible.py --translation-id 100 --lang english
 ```
 
