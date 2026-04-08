@@ -40,3 +40,19 @@ decode_usfm("JHN.3.16", NORWEGIAN)
 ```
 
 `book_maps.py` contains `NORWEGIAN` and `ENGLISH` dicts for use with `decode_usfm`.
+
+## Scraping an entire Bible
+
+`scrape_entire_bible.py` fetches every book and saves each as a JSON file in an output directory.
+
+```bash
+python scrape_entire_bible.py # defaults: translation 102, Norwegian filename
+python scrape_entire_bible.py --translation-id 100 --lang english
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--translation-id` | `102` | bible.com translation ID |
+| `--lang` | `norwegian` | Book name language (`norwegian` or `english`), used only in filenames |
+
+Output is written to `bible_<translation-id>/`, one file per book named `01_GEN_Genesis.json` etc. Already-completed books are skipped on reruns.
