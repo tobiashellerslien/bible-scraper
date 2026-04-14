@@ -18,7 +18,7 @@ BOOK_ORDER = [
     "NEH", "EST", "JOB", "PSA", "PRO",
     "ECC", "SNG", "ISA", "JER", "LAM",
     "EZK", "DAN", "HOS", "JOL", "AMO",
-    "OBA", "JON", "MIC", "NAH", "HAB",
+    "OBA", "JON", "MIC", "NAM", "HAB",
     "ZEP", "HAG", "ZEC", "MAL",
     "MAT", "MRK", "LUK", "JHN", "ACT",
     "ROM", "1CO", "2CO", "GAL", "EPH",

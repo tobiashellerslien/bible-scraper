@@ -16,7 +16,7 @@ CHAPTER_COUNT = {
     "NEH": 13, "EST":  10, "JOB": 42, "PSA": 150, "PRO": 31,
     "ECC": 12, "SNG":  8, "ISA": 66, "JER": 52, "LAM":  5,
     "EZK": 48, "DAN": 12, "HOS": 14, "JOL":  3, "AMO":  9,
-    "OBA":  1, "JON":  4, "MIC":  7, "NAH":  3, "HAB":  3,
+    "OBA":  1, "JON":  4, "MIC":  7, "NAM":  3, "HAB":  3,
     "ZEP":  3, "HAG":  2, "ZEC": 14, "MAL":  4,
     # New Testament
     "MAT": 28, "MRK": 16, "LUK": 24, "JHN": 21, "ACT": 28,
