@@ -28,7 +28,7 @@ CHAPTER_COUNT = {
 }
 
 
-_HEADING_CLASSES = {"s", "s1", "s2", "s3"}
+_HEADING_CLASSES = {"ms", "mr", "qa", "s", "s1", "s2", "s3"}
 
 
 def fetch_chapter(book: str, chapter: int, translation_id: int, include_headings: bool = False) -> dict:
@@ -97,9 +97,19 @@ def fetch_chapter(book: str, chapter: int, translation_id: int, include_headings
                     continue
                 cls = set(el.get("class") or [])
                 if cls & _HEADING_CLASSES and el.name == "div":
-                    hspan = el.find("span", class_="heading")
-                    if hspan:
-                        pending.append(hspan.get_text().strip())
+                    clone = BeautifulSoup(str(el), "html.parser")
+                    for note in clone.find_all("span", class_="note"):
+                        note.decompose()
+                    text = re.sub(r"\s+", " ", clone.get_text()).strip()
+                    if text:
+                        pending.append(text)
+                elif cls == {"d"} and el.name == "div":
+                    usfm_0 = f"{book}.{chapter}.0"
+                    if usfm_0 not in seen:
+                        seen.add(usfm_0)
+                        if pending:
+                            headings[usfm_0] = " / ".join(pending)
+                            pending = []
                 elif "verse" in cls and el.name == "span":
                     usfm = el.get("data-usfm", "")
                     if usfm and usfm not in seen:
@@ -177,7 +187,7 @@ def fetch_verse_range_cross_chapter(book: str, chapter_start: int, verse_start: 
     return result
 
 
-def fetch_book(book: str, translation_id: int, include_headings: bool = False, rate_limit: float = RATE_LIMIT) -> dict:
+def fetch_book(book: str, translation_id: int, include_headings: bool = False, rate_limit: float = RATE_LIMIT, verbose: bool = True) -> dict:
     """
     Fetches all verses in a book. Returns a dict: { "GEN.1.1": "text", ... }
 
@@ -185,6 +195,7 @@ def fetch_book(book: str, translation_id: int, include_headings: bool = False, r
     section headings across the book, keyed by the USFM of the verse each heading precedes.
 
     rate_limit: seconds to sleep between chapter requests (default: RATE_LIMIT)
+    verbose:    if False, suppresses per-chapter progress prints
     """
     if book not in CHAPTER_COUNT:
         raise KeyError(f"Unknown book: '{book}', use a USFM abbreviation, e.g. 'GEN', 'PSA'")
@@ -198,7 +209,8 @@ def fetch_book(book: str, translation_id: int, include_headings: bool = False, r
         if include_headings:
             all_headings.update(chapter_result.pop("headings", {}))
         result.update(chapter_result)
-        print(f"  Fetched {book} chapter {chapter}/{total}")
+        if verbose:
+            print(f"  Fetched {book} chapter {chapter}/{total}")
         if chapter < total:
             time.sleep(rate_limit)
 

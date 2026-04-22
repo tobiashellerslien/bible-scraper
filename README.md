@@ -34,8 +34,7 @@ fetch_chapter("GEN", 6, 102, include_headings=True)
 # -> {"GEN.6.1": "Da nå menneskene...", ...,
 #     "headings": {"GEN.6.1": "Menneskenes ondskap", "GEN.6.9": "Noah", ...}}
 
-# Whole book — also supports include_headings and rate_limit
-fetch_book("JON", 102)
+# Whole book
 fetch_book("JON", 102, include_headings=True, rate_limit=0.5)
 
 # Decode a USFM key to its parts
@@ -47,20 +46,30 @@ decode_usfm("JHN.3.16", NORWEGIAN)
 
 ### Section headings
 
-`fetch_chapter` and `fetch_book` accept `include_headings=True`. When set, a `"headings"` key is added to the returned dict mapping each heading to the USFM of the first verse it precedes:
+`fetch_chapter` and `fetch_book` accept `include_headings=True`. When set, a `"headings"` key is added to the returned dict mapping each heading to the USFM of the verse it precedes:
 
 ```python
 {"GEN.6.1": "Menneskenes ondskap", "GEN.6.9": "Noah", ...}
 ```
 
+Multiple heading types are captured: section headings (`s`, `s1`–`s3`), major section headings (`ms`), psalm acrostic letters (`qa`, e.g. "Aleph"), and major reference ranges (`mr`, e.g. "Psalms 1–41"). Multiple headings between the same pair of verses are joined with ` / `.
+
+Psalm introductions (e.g. "A Psalm of David") are stored as verse `0` (e.g. `PSA.23.0`). If a heading precedes the introduction, it is associated with verse `0`.
+
 `fetch_verse`, `fetch_verse_range`, and `fetch_verse_range_cross_chapter` never include headings.
+
+### Notes on data
+
+- Some translations merge two verses into one span; these appear as combined keys, e.g. `PSA.54.2+PSA.54.3`.
+- The NIV omits textually disputed verses (e.g. Matt 17:21); these appear as empty strings.
+- Verse numbering differs between translations (e.g. NB88 PSA.91 has no verse 4).
 
 ## Scraping an entire Bible
 
-`scrape_entire_bible.py` fetches every book and saves each as a JSON file in an output directory.
+`scrape_entire_bible.py` fetches every book for one translation and saves each as a JSON file.
 
 ```bash
-python scrape_entire_bible.py # defaults: translation 102, Norwegian filenames
+python scrape_entire_bible.py
 python scrape_entire_bible.py --translation-id 100 --lang english --include-headings --rate-limit 0.5
 ```
 
@@ -71,4 +80,14 @@ python scrape_entire_bible.py --translation-id 100 --lang english --include-head
 | `--include-headings` | off | Include section headings in JSON output |
 | `--rate-limit` | `0.1` | Seconds to sleep between chapter requests |
 
-Output is written to `bible_<translation-id>/`, one file per book named `01_GEN_Genesis.json` etc. Already-completed books are skipped on reruns.
+Output: `bible_<translation-id>/`, one file per book named `01_GEN_Genesis.json` etc. Already-complete books are skipped; partially scraped books (file exists but chapters are missing) are automatically filled in on rerun.
+
+## Scraping multiple Bibles in parallel
+
+`scrape_all_bibles.py` scrapes all configured translations concurrently using a thread pool.
+
+```bash
+python scrape_all_bibles.py
+```
+
+Translations and worker count are configured at the top of the file (`TRANSLATIONS`, `MAX_WORKERS`, `RATE_LIMIT`). Always runs with `include_headings=True`. Output follows the same format as above but in per-translation directories named `bible_<id>_<name>/`. Incomplete books are detected and filled in automatically on rerun.
