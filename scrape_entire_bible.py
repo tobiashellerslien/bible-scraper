@@ -33,10 +33,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--translation-id", type=int, default=DEFAULT_TRANSLATION_ID)
     parser.add_argument("--lang", choices=LANG_MAP.keys(), default=DEFAULT_LANG)
+    parser.add_argument("--include-headings", action="store_true", default=False)
+    parser.add_argument("--rate-limit", type=float, default=0.1, metavar="SECONDS")
     args = parser.parse_args()
 
     translation_id = args.translation_id
     lang = LANG_MAP[args.lang]
+    include_headings = args.include_headings
     output_dir = f"bible_{translation_id}"
 
     os.makedirs(output_dir, exist_ok=True)
@@ -54,7 +57,7 @@ def main():
         print(f"[fetching]  {name} ({book}, {CHAPTER_COUNT[book]} chapters) ...")
 
         try:
-            verses = fetch_book(book, translation_id)
+            verses = fetch_book(book, translation_id, include_headings=include_headings, rate_limit=args.rate_limit)
         except Exception as e:
             print(f"  ERROR: {e}", file=sys.stderr)
             print("  Waiting 5 seconds and continuing with the next book ...")

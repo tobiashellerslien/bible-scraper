@@ -28,16 +28,24 @@ CHAPTER_COUNT = {
 }
 
 
-def fetch_chapter(book: str, chapter: int, translation_id: int) -> dict:
+_HEADING_CLASSES = {"s", "s1", "s2", "s3"}
+
+
+def fetch_chapter(book: str, chapter: int, translation_id: int, include_headings: bool = False) -> dict:
     """
     Fetches all verses in a chapter from bible.com.
 
     Returns a dict: { "GEN.1.1": "text", "GEN.1.2": "text", ... }
     Psalms with an introduction get the intro stored as verse 0.
 
-    book:           USFM abbreviation, e.g. "GEN", "PSA", "JHN"
-    chapter:        chapter number (int)
-    translation_id: bible.com translation ID, e.g. 102 (NB88). Found in the URL when viewing a chapter on bible.com, e.g. https://www.bible.com/bible/102/GEN.1
+    When include_headings=True, a "headings" key is added to the result dict mapping
+    each heading to the USFM of the first verse that follows it, e.g.:
+    { "GEN.6.1": "Menneskenes ondskap", "GEN.6.8": "Noah" }
+
+    book:             USFM abbreviation, e.g. "GEN", "PSA", "JHN"
+    chapter:          chapter number (int)
+    translation_id:   bible.com translation ID, e.g. 102 (NB88). Found in the URL when viewing a chapter on bible.com, e.g. https://www.bible.com/bible/102/GEN.1
+    include_headings: if True, section headings are included in the returned dict under the "headings" key
     """
     url = f"{BASE_URL}/{translation_id}/{book}.{chapter}"
 
@@ -72,12 +80,35 @@ def fetch_chapter(book: str, chapter: int, translation_id: int) -> dict:
         content_spans = verse.find_all("span", class_="content")
         text = "".join(span.get_text() for span in content_spans)
         text = re.sub(r"\s+", " ", text).strip()
-        text = text.replace("*", "")
 
         if usfm in result:
             result[usfm] = re.sub(r"\s+", " ", result[usfm] + " " + text).strip()
         else:
             result[usfm] = text
+
+    if include_headings:
+        chapter_div = inner_soup.find("div", class_=lambda c: c and "chapter" in c)
+        if chapter_div:
+            headings = {}
+            pending = []
+            seen = set()
+            for el in chapter_div.descendants:
+                if not hasattr(el, "get"):
+                    continue
+                cls = set(el.get("class") or [])
+                if cls & _HEADING_CLASSES and el.name == "div":
+                    hspan = el.find("span", class_="heading")
+                    if hspan:
+                        pending.append(hspan.get_text().strip())
+                elif "verse" in cls and el.name == "span":
+                    usfm = el.get("data-usfm", "")
+                    if usfm and usfm not in seen:
+                        seen.add(usfm)
+                        if pending:
+                            headings[usfm] = " / ".join(pending)
+                            pending = []
+            if headings:
+                result["headings"] = headings
 
     return result
 
@@ -107,7 +138,7 @@ def fetch_verse_range(book: str, chapter: int, verse_start: int, verse_end: int,
     return result
 
 
-def fetch_verse_range_cross_chapter(book: str, chapter_start: int, verse_start: int, chapter_end: int, verse_end: int, translation_id: int) -> dict:
+def fetch_verse_range_cross_chapter(book: str, chapter_start: int, verse_start: int, chapter_end: int, verse_end: int, translation_id: int, rate_limit: float = RATE_LIMIT) -> dict:
     """
     Fetches a span of verses across multiple chapters.
 
@@ -119,6 +150,7 @@ def fetch_verse_range_cross_chapter(book: str, chapter_start: int, verse_start: 
     chapter_end:    last chapter number
     verse_end:      last verse in the last chapter
     translation_id: bible.com translation ID
+    rate_limit:     seconds to sleep between chapter requests (default: RATE_LIMIT)
     """
     if chapter_start == chapter_end:
         return fetch_verse_range(book, chapter_start, verse_start, verse_end, translation_id)
@@ -140,24 +172,38 @@ def fetch_verse_range_cross_chapter(book: str, chapter_start: int, verse_start: 
             result[usfm] = text
 
         if chapter < chapter_end:
-            time.sleep(RATE_LIMIT)
+            time.sleep(rate_limit)
 
     return result
 
 
-def fetch_book(book: str, translation_id: int) -> dict:
-    """Fetches all verses in a book. Returns a dict: { "GEN.1.1": "text", ... }"""
+def fetch_book(book: str, translation_id: int, include_headings: bool = False, rate_limit: float = RATE_LIMIT) -> dict:
+    """
+    Fetches all verses in a book. Returns a dict: { "GEN.1.1": "text", ... }
+
+    When include_headings=True, a "headings" key is included in the result with all
+    section headings across the book, keyed by the USFM of the verse each heading precedes.
+
+    rate_limit: seconds to sleep between chapter requests (default: RATE_LIMIT)
+    """
     if book not in CHAPTER_COUNT:
         raise KeyError(f"Unknown book: '{book}', use a USFM abbreviation, e.g. 'GEN', 'PSA'")
 
     result = {}
+    all_headings = {}
     total = CHAPTER_COUNT[book]
 
     for chapter in range(1, total + 1):
-        result.update(fetch_chapter(book, chapter, translation_id))
+        chapter_result = fetch_chapter(book, chapter, translation_id, include_headings=include_headings)
+        if include_headings:
+            all_headings.update(chapter_result.pop("headings", {}))
+        result.update(chapter_result)
         print(f"  Fetched {book} chapter {chapter}/{total}")
         if chapter < total:
-            time.sleep(RATE_LIMIT)
+            time.sleep(rate_limit)
+
+    if include_headings and all_headings:
+        result["headings"] = all_headings
 
     return result
 
