@@ -31,7 +31,7 @@ CHAPTER_COUNT = {
 _HEADING_CLASSES = {"ms", "mr", "qa", "s", "s1", "s2", "s3"}
 
 
-def fetch_chapter(book: str, chapter: int, translation_id: int, include_headings: bool = False) -> dict:
+def fetch_chapter(book: str, chapter: int, translation_id: int, include_headings: bool = False, include_footnotes: bool = False) -> dict:
     """
     Fetches all verses in a chapter from bible.com.
 
@@ -42,10 +42,17 @@ def fetch_chapter(book: str, chapter: int, translation_id: int, include_headings
     each heading to the USFM of the first verse that follows it, e.g.:
     { "GEN.6.1": "Menneskenes ondskap", "GEN.6.8": "Noah" }
 
-    book:             USFM abbreviation, e.g. "GEN", "PSA", "JHN"
-    chapter:          chapter number (int)
-    translation_id:   bible.com translation ID, e.g. 102 (NB88). Found in the URL when viewing a chapter on bible.com, e.g. https://www.bible.com/bible/102/GEN.1
-    include_headings: if True, section headings are included in the returned dict under the "headings" key
+    When include_footnotes=True, a "footnotes" key is added mapping USFM to footnote text.
+    For NB88 (id 102): collects all note text for verses whose text contains *, which
+    marks a commentary footnote embedded alongside cross-references in that translation.
+    For all other translations: collects only note.f elements (commentary footnotes,
+    excluding cross-references).
+
+    book:              USFM abbreviation, e.g. "GEN", "PSA", "JHN"
+    chapter:           chapter number (int)
+    translation_id:    bible.com translation ID, e.g. 102 (NB88). Found in the URL when viewing a chapter on bible.com, e.g. https://www.bible.com/bible/102/GEN.1
+    include_headings:  if True, section headings are included in the returned dict under the "headings" key
+    include_footnotes: if True, footnotes are included in the returned dict under the "footnotes" key
     """
     url = f"{BASE_URL}/{translation_id}/{book}.{chapter}"
 
@@ -85,6 +92,57 @@ def fetch_chapter(book: str, chapter: int, translation_id: int, include_headings
             result[usfm] = re.sub(r"\s+", " ", result[usfm] + " " + text).strip()
         else:
             result[usfm] = text
+
+    if include_footnotes:
+        footnotes = {}
+        if translation_id == 102:
+            # NB88: all notes are note.x; commentary is embedded alongside cross-refs,
+            # marked by * in the note body (and sometimes in the verse text itself).
+            # Collect all note bodies for any verse where at least one note body
+            # contains *, since that signals a commentary footnote is present.
+            for verse in inner_soup.find_all("span", class_="verse"):
+                usfm = verse.get("data-usfm")
+                if usfm not in result:
+                    continue
+                bodies = []
+                has_footnote = False
+                for note in verse.find_all("span", class_="note"):
+                    body = note.find("span", class_="body")
+                    if body:
+                        body_text = re.sub(r"\s+", " ", body.get_text()).strip()
+                        if body_text:
+                            bodies.append(body_text)
+                            if "*" in body_text:
+                                has_footnote = True
+                # Also catch verses where * appears in the content span but the
+                # corresponding note body happens not to contain * (edge case)
+                if not has_footnote and "*" in result[usfm]:
+                    has_footnote = True
+                if has_footnote and bodies:
+                    footnotes[usfm] = " ".join(bodies)
+        else:
+            # All other translations: collect note.f elements (commentary footnotes only,
+            # excludes note.x cross-references). Multiple footnotes per verse are joined
+            # with " / ". The fr (verse reference) sub-span is stripped as redundant.
+            for verse in inner_soup.find_all("span", class_="verse"):
+                usfm = verse.get("data-usfm")
+                parts = []
+                for note in verse.find_all("span", class_="note"):
+                    if "f" not in set(note.get("class") or []):
+                        continue
+                    body = note.find("span", class_="body")
+                    if not body:
+                        continue
+                    clone = BeautifulSoup(str(body), "html.parser")
+                    for fr in clone.find_all("span", class_="fr"):
+                        fr.decompose()
+                    text = re.sub(r"\s+", " ", clone.get_text()).strip()
+                    if text:
+                        parts.append(text)
+                if parts:
+                    footnotes[usfm] = " / ".join(parts)
+        if footnotes:
+            result["footnotes"] = footnotes
 
     if include_headings:
         chapter_div = inner_soup.find("div", class_=lambda c: c and "chapter" in c)
@@ -187,12 +245,15 @@ def fetch_verse_range_cross_chapter(book: str, chapter_start: int, verse_start: 
     return result
 
 
-def fetch_book(book: str, translation_id: int, include_headings: bool = False, rate_limit: float = RATE_LIMIT, verbose: bool = True) -> dict:
+def fetch_book(book: str, translation_id: int, include_headings: bool = False, include_footnotes: bool = False, rate_limit: float = RATE_LIMIT, verbose: bool = True) -> dict:
     """
     Fetches all verses in a book. Returns a dict: { "GEN.1.1": "text", ... }
 
     When include_headings=True, a "headings" key is included in the result with all
     section headings across the book, keyed by the USFM of the verse each heading precedes.
+
+    When include_footnotes=True, a "footnotes" key is included with footnote text per verse.
+    See fetch_chapter for details on per-translation footnote behaviour.
 
     rate_limit: seconds to sleep between chapter requests (default: RATE_LIMIT)
     verbose:    if False, suppresses per-chapter progress prints
@@ -202,12 +263,15 @@ def fetch_book(book: str, translation_id: int, include_headings: bool = False, r
 
     result = {}
     all_headings = {}
+    all_footnotes = {}
     total = CHAPTER_COUNT[book]
 
     for chapter in range(1, total + 1):
-        chapter_result = fetch_chapter(book, chapter, translation_id, include_headings=include_headings)
+        chapter_result = fetch_chapter(book, chapter, translation_id, include_headings=include_headings, include_footnotes=include_footnotes)
         if include_headings:
             all_headings.update(chapter_result.pop("headings", {}))
+        if include_footnotes:
+            all_footnotes.update(chapter_result.pop("footnotes", {}))
         result.update(chapter_result)
         if verbose:
             print(f"  Fetched {book} chapter {chapter}/{total}")
@@ -216,6 +280,8 @@ def fetch_book(book: str, translation_id: int, include_headings: bool = False, r
 
     if include_headings and all_headings:
         result["headings"] = all_headings
+    if include_footnotes and all_footnotes:
+        result["footnotes"] = all_footnotes
 
     return result
 

@@ -32,11 +32,13 @@ def safe_print(*args, **kwargs):
         print(*args, **kwargs)
 
 
+_META_KEYS = {"headings", "footnotes"}
+
 def _present_chapters(verses: dict) -> set:
     """Returns the set of chapter numbers present in a verses dict."""
     chapters = set()
     for key in verses:
-        if key == "headings":
+        if key in _META_KEYS:
             continue
         parts = key.split(".")
         if len(parts) >= 3:
@@ -65,13 +67,15 @@ def scrape_book_task(translation_id: int, name: str, lang: dict, book: str):
     else:
         missing = expected
 
-    verses = {k: v for k, v in existing_verses.items() if k != "headings"}
+    verses = {k: v for k, v in existing_verses.items() if k not in ("headings", "footnotes")}
     headings = dict(existing_verses.get("headings", {}))
+    footnotes = dict(existing_verses.get("footnotes", {}))
 
     try:
         for i, chapter in enumerate(sorted(missing)):
-            chapter_result = fetch_chapter(book, chapter, translation_id, include_headings=True)
+            chapter_result = fetch_chapter(book, chapter, translation_id, include_headings=True, include_footnotes=True)
             headings.update(chapter_result.pop("headings", {}))
+            footnotes.update(chapter_result.pop("footnotes", {}))
             verses.update(chapter_result)
             if i < len(missing) - 1:
                 time.sleep(RATE_LIMIT)
@@ -80,14 +84,17 @@ def scrape_book_task(translation_id: int, name: str, lang: dict, book: str):
 
     if headings:
         verses["headings"] = headings
+    if footnotes:
+        verses["footnotes"] = footnotes
 
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(verses, f, ensure_ascii=False, indent=2)
 
-    verse_count = sum(1 for k in verses if k != "headings")
+    verse_count = sum(1 for k in verses if k not in ("headings", "footnotes"))
     heading_count = len(verses.get("headings", {}))
+    footnote_count = len(verses.get("footnotes", {}))
     was_partial = bool(existing_verses)
-    return "done", (name, book_name, book, verse_count, heading_count, len(missing), was_partial)
+    return "done", (name, book_name, book, verse_count, heading_count, footnote_count, len(missing), was_partial)
 
 
 if __name__ == "__main__":
@@ -114,9 +121,9 @@ if __name__ == "__main__":
                 continue
 
             if status == "done":
-                name, book_name, book, verse_count, heading_count, fetched_chapters, was_partial = payload
+                name, book_name, book, verse_count, heading_count, footnote_count, fetched_chapters, was_partial = payload
                 tag = f"filled {fetched_chapters} ch" if was_partial else f"{fetched_chapters} ch"
-                safe_print(f"  [{completed}/{total}] {name} {book_name} ({book}) -> {verse_count} verses, {heading_count} headings ({tag})")
+                safe_print(f"  [{completed}/{total}] {name} {book_name} ({book}) -> {verse_count} verses, {heading_count} headings, {footnote_count} footnotes ({tag})")
             elif status == "error":
                 safe_print(f"  [ERROR] {payload}", file=sys.stderr)
 
