@@ -32,7 +32,9 @@ All fetch functions return a `dict` with USFM keys and verse text as values, e.g
 
 ## Architecture
 
-The scraper targets bible.com's Next.js pages. Instead of parsing page HTML directly, it reads the embedded `<script id="__NEXT_DATA__">` JSON blob which contains pre-rendered chapter HTML under `props.pageProps.chapterInfo.content`. That inner HTML is then parsed with BeautifulSoup to extract `span.verse` elements by their `data-usfm` attribute.
+The scraper fetches chapters from bible.com's JSON chapter API (`https://nodejs.bible.com/api/bible/chapter/3.1?id=<translation_id>&reference=<BOOK>.<chapter>`, see `API_URL` in `bible_scraper.py`). The `content` field of that JSON is pre-rendered chapter HTML, which is parsed with BeautifulSoup to extract `span.verse` elements by their `data-usfm` attribute.
+
+The API is used instead of the regular `https://www.bible.com/bible/...` HTML pages because those now return an anti-bot JS challenge (an F5/Fastly "Client Challenge" stub with no content) for most translations. The API returns the same chapter HTML the page's `__NEXT_DATA__` blob used to expose, but as plain JSON, with no challenge.
 
 Key parsing details:
 - Some translations split a verse across multiple `span.verse` elements (e.g. poetry); text is accumulated per USFM key

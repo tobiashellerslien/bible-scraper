@@ -6,6 +6,10 @@ from bs4 import BeautifulSoup
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 BASE_URL = "https://www.bible.com/bible"
+# JSON chapter API used by the site. Serves the same pre-rendered chapter HTML as
+# the page's __NEXT_DATA__ blob, but as plain JSON, bypassing the anti-bot JS
+# challenge that the HTML pages now return for most translations.
+API_URL = "https://nodejs.bible.com/api/bible/chapter/3.1"
 RATE_LIMIT = 0.1  # seconds between requests in fetch_book
 
 CHAPTER_COUNT = {
@@ -54,7 +58,7 @@ def fetch_chapter(book: str, chapter: int, translation_id: int, include_headings
     include_headings:  if True, section headings are included in the returned dict under the "headings" key
     include_footnotes: if True, footnotes are included in the returned dict under the "footnotes" key
     """
-    url = f"{BASE_URL}/{translation_id}/{book}.{chapter}"
+    url = f"{API_URL}?id={translation_id}&reference={book}.{chapter}"
 
     try:
         page = requests.get(url, headers=HEADERS, timeout=10)
@@ -62,11 +66,8 @@ def fetch_chapter(book: str, chapter: int, translation_id: int, include_headings
     except requests.RequestException as e:
         raise ConnectionError(f"Failed to fetch {book}.{chapter}: {e}")
 
-    soup = BeautifulSoup(page.text, "html.parser")
-    script_tag = soup.find("script", {"id": "__NEXT_DATA__"})
-
-    data = json.loads(script_tag.get_text())
-    html_content = data["props"]["pageProps"]["chapterInfo"]["content"]
+    data = page.json()
+    html_content = data["content"]
 
     inner_soup = BeautifulSoup(html_content, "html.parser")
 
